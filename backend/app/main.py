@@ -6,6 +6,23 @@ import os
 import time
 from app.pipeline import procesar_fotografia
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.pipeline import procesar_fotografia
+
+app = FastAPI(title="EpicPlay API")
+
+# Habilitar CORS para permitir peticiones desde Vue/Vuetify (puerto 3000)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permite cualquier origen en entorno local
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Resto de tus endpoints (/api/procesar-foto, /api/fotografias, etc.)
+
 app = FastAPI(title="EpicPlay API - DevOps Phase 2")
 
 # Permitir peticiones desde el frontend (Vue / Vuetify)

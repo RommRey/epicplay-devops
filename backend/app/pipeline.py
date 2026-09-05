@@ -29,7 +29,7 @@ def calcular_nitidez(ruta_imagen):
         return 0.0
     return cv2.Laplacian(img, cv2.CV_64F).var()
 
-def procesar_fotografia(ruta_origen, ruta_destino, ruta_watermark=None, umbral_blur=100.0, relacion_aspecto="4:5"):
+def procesar_fotografia(ruta_origen, ruta_destino, ruta_watermark=None, umbral_blur=35.0, relacion_aspecto="4:5"):
     """
     Ejecuta el pipeline completo de 9 pasos de EpicPlay.
     """
@@ -101,7 +101,7 @@ def procesar_fotografia(ruta_origen, ruta_destino, ruta_watermark=None, umbral_b
         ruta_destino,
         format='PNG',
         optimize=True,
-        icc_profile=srgb_profile.tobytes()
+        icc_profile=ImageCms.ImageCmsProfile(srgb_profile).tobytes()
     )
 
     return {
