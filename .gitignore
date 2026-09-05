@@ -1,0 +1,26 @@
+# Entorno virtual de Python
+backend/venv/
+backend/__pycache__/
+*.pyc
+
+# Dependencias de Node / Vue
+frontend/node_modules/
+frontend/dist/
+frontend/epicplay/node_modules/
+
+# Archivos temporales de imágenes
+backend/uploads/raw/*
+backend/uploads/processed/*
+!backend/uploads/raw/.gitkeep
+!backend/uploads/processed/.gitkeep
+
+# Pesos de modelos IA
+*.pt
+
+# Base de datos local
+postgres_data/
+
+# Editor / Sistema
+.DS_Store
+.vscode/
+.idea/
