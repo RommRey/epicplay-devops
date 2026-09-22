@@ -18,12 +18,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Configuración de conexión a PostgreSQL
 DB_CONFIG = {
-    "dbname": "epicplay_db",
+    "host": os.getenv("DB_HOST", "localhost"), # Lee la variable de Docker o usa localhost por defecto
+    "port": 5432,
     "user": "epicplay_user",
     "password": "epicplay_password",
-    "host": "localhost",
-    "port": "5432"
+    "dbname": "epicplay_db"
 }
 
 def get_db():
