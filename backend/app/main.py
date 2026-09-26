@@ -1,15 +1,18 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
-from fastapi.middleware.cors import CORSMiddleware
-import psycopg2
-from psycopg2.extras import RealDictCursor
 import os
 import shutil
-from pathlib import Path
+from typing import List, Optional
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+
+from app.database import init_db, get_db, FotografiaRecord
 from app.pipeline import procesar_fotografia
 
-app = FastAPI(title="EpicPlay - Pipeline & Data Engine")
+app = FastAPI(title="EpicPlay Engine")
 
-# Configurar CORS
+# Inicializar las tablas de la base de datos al arrancar el backend
+init_db()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,122 +21,123 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configuración de conexión a PostgreSQL
-DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "localhost"), # Lee la variable de Docker o usa localhost por defecto
-    "port": 5432,
-    "user": "epicplay_user",
-    "password": "epicplay_password",
-    "dbname": "epicplay_db"
-}
+@app.on_event("startup")
+def startup_event():
+    init_db()
 
-def get_db():
-    return psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
-
-# Inicializar Base de Datos con Esquema Completo
-# Inicializar Base de Datos con Esquema Actualizado
-def init_db():
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        # Eliminar versión previa para actualizar columnas de la Fase 2.1
-        cursor.execute("DROP TABLE IF EXISTS fotografias;")
-        cursor.execute("""
-            CREATE TABLE fotografias (
-                id SERIAL PRIMARY KEY,
-                nombre_archivo VARCHAR(255) NOT NULL,
-                varianza_laplaciana FLOAT NOT NULL,
-                es_nitida BOOLEAN NOT NULL,
-                estado VARCHAR(50) NOT NULL,
-                tiempo_ejecucion_ms INT NOT NULL,
-                fecha_procesamiento TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("Base de datos sincronizada con el nuevo esquema de la Fase 2.1.")
-    except Exception as e:
-        print(f"Error al inicializar la base de datos: {e}")
-init_db()
+@app.get("/")
+def read_root():
+    return {"status": "ok", "message": "API de EpicPlay lista"}
 
 @app.post("/api/procesar-foto")
-async def procesar_foto_endpoint(file: UploadFile = File(...)):
-    ruta_base = Path(__file__).resolve().parent.parent
-    dir_raw = ruta_base / "uploads" / "raw"
-    dir_proc = ruta_base / "uploads" / "processed"
+async def procesar_foto_endpoint(
+    files: List[UploadFile] = File(...),
+    formatos: Optional[str] = Form("instagram,galeria_web,impresion,credencial,ipad"),
+    db: Session = Depends(get_db)
+):
+    formatos_lista = [f.strip() for f in formatos.split(",") if f.strip()]
+    temp_dir = os.path.abspath("uploads/temp")
+    base_dir_salida = os.path.abspath("uploads/processed")
+    os.makedirs(temp_dir, exist_ok=True)
 
-    dir_raw.mkdir(parents=True, exist_ok=True)
-    dir_proc.mkdir(parents=True, exist_ok=True)
+    resultados_lista = []
 
-    ruta_raw = dir_raw / file.filename
-    ruta_proc = dir_proc / f"proc_{file.filename}"
+    for file in files:
+        # Guardar archivo subido temporalmente en disco
+        ruta_temp = os.path.join(temp_dir, file.filename)
+        with open(ruta_temp, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-    with open(ruta_raw, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        nombre_base = os.path.splitext(file.filename)[0]
 
-    # Ejecutar Pipeline
-    res = procesar_fotografia(str(ruta_raw), str(ruta_proc))
+        # Procesar con el pipeline
+        resultado = procesar_fotografia(ruta_temp, base_dir_salida, formatos=formatos_lista)
 
-    # Registrar resultado en PostgreSQL mediante SQL directo
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO fotografias 
-            (nombre_archivo, varianza_laplaciana, es_nitida, estado, tiempo_ejecucion_ms)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id;
-        """, (res["nombre"], res["varianza"], res["es_nitida"], res["estado"], res["tiempo_ms"]))
-        
-        foto_id = cursor.fetchone()["id"]
-        conn.commit()
-        cursor.close()
-        conn.close()
-        res["id"] = foto_id
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en BD: {str(e)}")
+        # Registrar en Base de Datos
+        registro = FotografiaRecord(
+            nombre_archivo=resultado["nombre"],
+            es_nitida=resultado["es_nitida"],
+            varianza_laplaciana=resultado["varianza"],
+            estado=resultado["estado"],
+            tiempo_ejecucion_ms=resultado["tiempo_ms"],
+            ruta_instagram=os.path.join(base_dir_salida, "instagram", f"{nombre_base}_ig.png") if "instagram" in formatos_lista and resultado["es_nitida"] else None,
+            ruta_galeria_web=os.path.join(base_dir_salida, "galeria_web", f"{nombre_base}_web.jpg") if "galeria_web" in formatos_lista and resultado["es_nitida"] else None,
+            ruta_impresion=os.path.join(base_dir_salida, "impresion_4x6", f"{nombre_base}_print.jpg") if "impresion" in formatos_lista and resultado["es_nitida"] else None,
+            ruta_credencial=os.path.join(base_dir_salida, "credencial", f"{nombre_base}_credencial.jpg") if "credencial" in formatos_lista and resultado["es_nitida"] else None,
+            ruta_ipad=os.path.join(base_dir_salida, "ipad", f"{nombre_base}_ipad.jpg") if "ipad" in formatos_lista and resultado["es_nitida"] else None
+        )
 
-    return res
+        db.add(registro)
+        db.commit()
+        db.refresh(registro)
 
-# Endpoint de Consultas SQL avanzadas para la UI y la Fase 2.1
+        # Limpiar archivo temporal
+        if os.path.exists(ruta_temp):
+            try:
+                os.remove(ruta_temp)
+            except Exception:
+                pass
+
+        resultados_lista.append({"id": registro.id, "detalles": resultado})
+
+    return {"procesados": len(resultados_lista), "resultados": resultados_lista}
+
 @app.get("/api/fotografias")
-def listar_fotografias(estado: str = Query(None), orden: str = Query("desc")):
-    conn = get_db()
-    cursor = conn.cursor()
+def obtener_historial_fotografias(db: Session = Depends(get_db)):
+    registros = db.query(FotografiaRecord).order_by(FotografiaRecord.id.desc()).all()
     
-    query = "SELECT * FROM fotografias"
-    params = []
-    
-    if estado:
-        query += " WHERE estado = %s"
-        params.append(estado)
-        
-    query += f" ORDER BY fecha_procesamiento {orden.upper()};"
-    
-    cursor.execute(query, params)
-    fotos = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return fotos
+    # Formateo explícito mapeando tiempo_ejecucion_ms a tiempo_ms para la interfaz gráfica
+    resultado = []
+    for r in registros:
+        resultado.append({
+            "id": r.id,
+            "nombre_archivo": r.nombre_archivo,
+            "estado": r.estado,
+            "varianza_laplaciana": r.varianza_laplaciana,
+            "tiempo_ms": r.tiempo_ejecucion_ms  # <-- CORREGIDO AQUÍ
+        })
+    return resultado
 
-# Endpoint de Métricas Globales para el Panel (Dashboard)
-@app.get("/api/metricas")
-def obtener_metricas():
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT 
-            COUNT(*) as total_fotos,
-            COUNT(*) FILTER (WHERE estado = 'procesada') as procesadas,
-            COUNT(*) FILTER (WHERE estado = 'descartada') as descartadas,
-            COALESCE(AVG(tiempo_ejecucion_ms), 0) as tiempo_promedio_ms,
-            COALESCE(AVG(varianza_laplaciana), 0) as varianza_promedio
-        FROM fotografias;
-    """)
-    
-    metricas = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return metricas
+@app.delete("/api/fotografias/{foto_id}")
+def eliminar_fotografia(foto_id: int, db: Session = Depends(get_db)):
+    registro = db.query(FotografiaRecord).filter(FotografiaRecord.id == foto_id).first()
+    if not registro:
+        raise HTTPException(status_code=404, detail="Registro no encontrado.")
+
+    rutas = [
+        registro.ruta_instagram,
+        registro.ruta_galeria_web,
+        registro.ruta_impresion,
+        registro.ruta_credencial,
+        registro.ruta_ipad
+    ]
+    for r in rutas:
+        if r and os.path.exists(r):
+            try:
+                os.remove(r)
+            except Exception:
+                pass
+
+    db.delete(registro)
+    db.commit()
+    return {"message": f"Fotografía ID {foto_id} eliminada correctamente"}
+
+@app.delete("/api/fotografias")
+def limpiar_todo_el_historial(db: Session = Depends(get_db)):
+    db.query(FotografiaRecord).delete()
+    db.commit()
+
+    folder_processed = os.path.abspath("uploads/processed")
+    if os.path.exists(folder_processed):
+        for item in os.listdir(folder_processed):
+            sub_path = os.path.join(folder_processed, item)
+            if os.path.isdir(sub_path):
+                for f in os.listdir(sub_path):
+                    file_p = os.path.join(sub_path, f)
+                    if os.path.isfile(file_p):
+                        try:
+                            os.remove(file_p)
+                        except Exception:
+                            pass
+
+    return {"message": "Historial y archivos procesados eliminados correctamente"}

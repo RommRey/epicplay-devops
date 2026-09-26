@@ -1,27 +1,30 @@
+version: '3.8'
+
 services:
-  postgres:
+  db:
     image: postgres:15-alpine
     container_name: epicplay_db
+    restart: always
     environment:
-      POSTGRES_USER: epicplay_user
-      POSTGRES_PASSWORD: epicplay_password
       POSTGRES_DB: epicplay_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  backend:
-    build: ./backend
-    container_name: epicplay_backend
-    ports:
-      - "8000:8000"
-    depends_on:
-      - postgres
-    volumes:
-      - ./backend:/app  # Sincroniza tu código local con el contenedor
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: epicplay_pgadmin
+    restart: always
     environment:
-      - DB_HOST=postgres # Variable para que Python encuentre la BD
+      PGADMIN_DEFAULT_EMAIL: admin@epicplay.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
 
 volumes:
   postgres_data:
