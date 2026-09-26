@@ -1,0 +1,16 @@
+replicaCount: 1
+
+image:
+  repository: epicplay-backend
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+database:
+  name: epicplay_db
+  user: postgres
+  password: postgrespassword
+  port: 5432
