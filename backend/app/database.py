@@ -5,9 +5,15 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import Column, Integer, String, DateTime, func
 
 # 1. Conexión dinámica a PostgreSQL
-# Si corre dentro de Docker usa DB_HOST=postgres, si corre local usa localhost
 DB_HOST = os.getenv("DB_HOST", "localhost")
-SQLALCHEMY_DATABASE_URL = f"postgresql://epicplay_user:epicplay_password@{DB_HOST}:5432/epicplay_db"
+DB_USER = os.getenv("DB_USER", "epicplay_user")
+DB_PASS = os.getenv("DB_PASSWORD", "epicplay_password")
+DB_NAME = os.getenv("DB_NAME", "epicplay_db")
+
+SQLALCHEMY_DATABASE_URL = os.getenv(
+    "DATABASE_URL", 
+    f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:5432/{DB_NAME}"
+)
 
 # 2. Crear engine de SQLAlchemy para PostgreSQL
 engine = create_engine(SQLALCHEMY_DATABASE_URL)

@@ -14,8 +14,8 @@ jobs:
       postgres:
         image: postgres:15-alpine
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgrespassword
+          POSTGRES_USER: epicplay_user
+          POSTGRES_PASSWORD: epicplay_password
           POSTGRES_DB: epicplay_db
         ports:
           - 5432:5432
@@ -35,8 +35,10 @@ jobs:
         python-version: "3.12"
 
     - name: Instalar dependencias del sistema para OpenCV
+      env:
+        DEBIAN_FRONTEND: noninteractive
       run: |
-        sudo apt-get update
+        sudo apt-get update -y
         sudo apt-get install -y libgl1-mesa-glx libglib2.0-0
 
     - name: Instalar dependencias de Python
@@ -49,8 +51,8 @@ jobs:
       env:
         DB_HOST: localhost
         DB_PORT: 5432
-        DB_USER: postgres
-        DB_PASSWORD: postgrespassword
+        DB_USER: epicplay_user
+        DB_PASSWORD: epicplay_password
         DB_NAME: epicplay_db
       run: |
         python -m pytest backend/tests/test_lista.py -v

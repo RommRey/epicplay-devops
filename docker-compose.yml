@@ -7,8 +7,8 @@ services:
     restart: always
     environment:
       POSTGRES_DB: epicplay_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_USER: epicplay_user
+      POSTGRES_PASSWORD: epicplay_password
     ports:
       - "5432:5432"
     volumes:
