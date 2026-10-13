@@ -5,8 +5,12 @@ from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
+from app.database import init_db, get_db, FotografiaRecord, ListaExportacionRecord
 from app.database import init_db, get_db, FotografiaRecord
 from app.pipeline import procesar_fotografia
+
+
+
 
 app = FastAPI(title="EpicPlay Engine")
 
@@ -141,3 +145,56 @@ def limpiar_todo_el_historial(db: Session = Depends(get_db)):
                             pass
 
     return {"message": "Historial y archivos procesados eliminados correctamente"}
+
+# --- ENDPOINTS PARA LISTA DE EXPORTACIÓN (FASE 3) ---
+from pydantic import BaseModel
+from typing import List
+
+class ItemLista(BaseModel):
+    nombre_archivo: str
+    formatos: List[str]
+
+@app.get("/api/lista")
+def obtener_lista(db: Session = Depends(get_db)):
+    try:
+        registros = db.query(ListaExportacionRecord).order_by(ListaExportacionRecord.id.desc()).all()
+        lista = [
+            {
+                "id": r.id,
+                "nombre_archivo": r.nombre_archivo,
+                "formatos": r.formatos.split(",") if r.formatos else [],
+                "fecha_agregado": str(r.fecha_agregado)
+            }
+            for r in registros
+        ]
+        return {"ok": True, "items": lista}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@app.post("/api/lista/agregar")
+def agregar_a_lista(item: ItemLista, db: Session = Depends(get_db)):
+    try:
+        formatos_str = ",".join(item.formatos)
+        nuevo_item = ListaExportacionRecord(
+            nombre_archivo=item.nombre_archivo,
+            formatos=formatos_str
+        )
+        db.add(nuevo_item)
+        db.commit()
+        db.refresh(nuevo_item)
+        return {"ok": True, "mensaje": "Foto agregada a la lista", "id": nuevo_item.id}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@app.delete("/api/lista/eliminar/{item_id}")
+def eliminar_de_lista(item_id: int, db: Session = Depends(get_db)):
+    try:
+        item = db.query(ListaExportacionRecord).filter(ListaExportacionRecord.id == item_id).first()
+        if not item:
+            return {"ok": False, "error": "Elemento no encontrado"}
+        
+        db.delete(item)
+        db.commit()
+        return {"ok": True, "mensaje": f"Item {item_id} eliminado de la lista"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}

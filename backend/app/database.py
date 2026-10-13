@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import Column, Integer, String, DateTime, func
 
 # 1. Conexión dinámica a PostgreSQL
 # Si corre dentro de Docker usa DB_HOST=postgres, si corre local usa localhost
@@ -44,3 +45,11 @@ def get_db():
         yield db
     finally:
         db.close()
+
+class ListaExportacionRecord(Base):
+    __tablename__ = "lista_exportacion"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre_archivo = Column(String(255), nullable=False)
+    formatos = Column(String(255), nullable=False)
+    fecha_agregado = Column(DateTime, server_default=func.now())
