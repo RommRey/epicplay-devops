@@ -35,11 +35,9 @@ jobs:
         python-version: "3.12"
 
     - name: Instalar dependencias del sistema para OpenCV
-      env:
-        DEBIAN_FRONTEND: noninteractive
       run: |
-        sudo apt-get update -y
-        sudo apt-get install -y libgl1-mesa-glx libglib2.0-0
+        sudo apt-get update
+        sudo apt-get install -y libgl1 libglib2.0-0
 
     - name: Instalar dependencias de Python
       run: |
