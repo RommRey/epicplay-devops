@@ -9,3 +9,4 @@ python-multipart==0.0.9
 numpy==1.26.4
 rawpy==0.19.1
 pillow-heif==0.15.0
+httpx>=0.27.0
