@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 # Pasamos app directamente como argumento posicional para evitar el error de parámetro
-client = TestClient(app=app)
+client = TestClient(app)
 
 def test_agregar_y_consultar_lista():
     payload = {
