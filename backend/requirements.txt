@@ -13,3 +13,7 @@ rawpy==0.19.1
 pillow-heif==0.15.0
 prometheus-fastapi-instrumentator==7.0.0
 python-json-logger==2.0.7
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+bandit==1.7.8
+safety==3.0.1

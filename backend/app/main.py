@@ -10,6 +10,12 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.database import init_db, get_db, FotografiaRecord, ListaExportacionRecord
 from app.pipeline import procesar_fotografia
+from fastapi.security import OAuth2PasswordRequestForm
+from app.security import (
+    hash_password, verify_password, create_access_token, 
+    get_current_user, require_role
+)
+
 
 # 1. Configurar Logger Estructurado en JSON
 logger = logging.getLogger("epicplay")
@@ -236,3 +242,36 @@ def eliminar_de_lista(item_id: int, db: Session = Depends(get_db)):
         return {"ok": True, "mensaje": f"Item {item_id} eliminado de la lista"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+    # Base de datos simulada de usuarios con contraseñas encriptadas y roles
+USERS_DB = {
+    "admin_epicplay": {
+        "username": "admin_epicplay",
+        "password_hash": hash_password("AdminPass123!"),
+        "role": "admin"
+    },
+    "fotografo_user": {
+        "username": "fotografo_user",
+        "password_hash": hash_password("UserPass123!"),
+        "role": "user"
+    }
+}
+
+@app.post("/api/auth/login", tags=["Autenticación"])
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = USERS_DB.get(form_data.username)
+    if not user or not verify_password(form_data.password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Usuario o contraseña incorrectos")
+    
+    access_token = create_access_token(data={"sub": user["username"], "role": user["role"]})
+    return {"access_token": access_token, "token_type": "bearer", "role": user["role"]}
+
+# Ruta protegida con JWT y Rol de Usuario
+@app.get("/api/auth/perfil", tags=["Autenticación"])
+async def obtener_perfil(current_user: dict = Depends(get_current_user)):
+    return {"mensaje": "Acceso concedido", "usuario": current_user}
+
+# Ejemplo de RBAC: Solo Administradores pueden eliminar
+@app.delete("/api/lista/eliminar_admin/{item_id}", tags=["Lista Protegida"])
+async def eliminar_como_admin(item_id: int, current_user: dict = Depends(require_role("admin"))):
+    return {"ok": True, "mensaje": f"Elemento {item_id} eliminado por el admin {current_user['username']}"}
