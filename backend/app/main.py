@@ -9,10 +9,14 @@ from app.database import init_db, get_db, FotografiaRecord, ListaExportacionReco
 from app.database import init_db, get_db, FotografiaRecord
 from app.pipeline import procesar_fotografia
 
+from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 
+# 1. Primero defines la instancia de FastAPI
+app = FastAPI(title="EpicPlay API")
 
-
-app = FastAPI(title="EpicPlay Engine")
+# 2. LUEGO la instrumentas con Prometheus
+Instrumentator().instrument(app).expose(app)
 
 # Inicializar las tablas de la base de datos al arrancar el backend
 init_db()
