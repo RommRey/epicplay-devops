@@ -1,22 +1,56 @@
 import os
 import shutil
+import logging
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-
-from app.database import init_db, get_db, FotografiaRecord, ListaExportacionRecord
-from app.database import init_db, get_db, FotografiaRecord
-from app.pipeline import procesar_fotografia
-
-from fastapi import FastAPI
+from pythonjsonlogger import jsonlogger
 from prometheus_fastapi_instrumentator import Instrumentator
 
-# 1. Primero defines la instancia de FastAPI
+from app.database import init_db, get_db, FotografiaRecord, ListaExportacionRecord
+from app.pipeline import procesar_fotografia
+
+# 1. Configurar Logger Estructurado en JSON
+logger = logging.getLogger("epicplay")
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s')
+logHandler.setFormatter(formatter)
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
+
+# 2. Instanciar FastAPI
 app = FastAPI(title="EpicPlay API")
 
-# 2. LUEGO la instrumentas con Prometheus
+# 3. Instrumentar con Prometheus
 Instrumentator().instrument(app).expose(app)
+
+# 4. Middleware para registrar cada Petición HTTP en JSON
+@app.middleware("http")
+async def log_requests(request, call_next):
+    logger.info("Peticion recibida", extra={
+        "method": request.method,
+        "url": str(request.url.path),
+        "client_ip": request.client.host if request.client else "unknown"
+    })
+    response = await call_next(request)
+    logger.info("Respuesta enviada", extra={
+        "method": request.method,
+        "url": str(request.url.path),
+        "status_code": response.status_code
+    })
+    return response
+
+# Inicializar las tablas de la base de datos al arrancar el backend
+init_db()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Inicializar las tablas de la base de datos al arrancar el backend
 init_db()

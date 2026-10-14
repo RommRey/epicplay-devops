@@ -12,3 +12,4 @@ numpy==1.26.4
 rawpy==0.19.1
 pillow-heif==0.15.0
 prometheus-fastapi-instrumentator==7.0.0
+python-json-logger==2.0.7
